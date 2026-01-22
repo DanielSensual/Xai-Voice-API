@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok Voice Agent Test</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎙️ Grok Voice Agent</h1>
+      <p class="subtitle">Real-time voice conversations with xAI</p>
+    </header>
+
+    <div class="status-bar">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+
+    <div class="controls">
+      <div class="voice-selector">
+        <label for="voiceSelect">Voice</label>
+        <select id="voiceSelect">
+          <option value="Ara">Ara (Female, Warm)</option>
+          <option value="Rex">Rex (Male, Confident)</option>
+          <option value="Sal">Sal (Neutral, Smooth)</option>
+          <option value="Eve">Eve (Female, Energetic)</option>
+          <option value="Leo">Leo (Male, Authoritative)</option>
+        </select>
+      </div>
+
+      <button id="micButton" class="mic-button" disabled>
+        <svg class="mic-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+        <span class="mic-label">Start</span>
+      </button>
+
+      <button id="connectBtn" class="connect-button">Connect</button>
+    </div>
+
+    <div class="instructions-input">
+      <label for="instructions">System Instructions</label>
+      <textarea id="instructions" placeholder="You are a helpful assistant...">You are a helpful and friendly AI assistant. Keep responses concise and conversational.</textarea>
+    </div>
+
+    <div class="transcript-container">
+      <h2>Conversation</h2>
+      <div id="transcript" class="transcript"></div>
+    </div>
+
+    <div class="debug-panel">
+      <details>
+        <summary>Debug Log</summary>
+        <div id="debugLog" class="debug-log"></div>
+      </details>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
