@@ -284,47 +284,49 @@ async function connectWithToken() {
         const tokenData = await tokenResponse.json();
         log(`Token response: ${JSON.stringify(tokenData).substring(0, 100)}...`);
 
-        if (tokenData.client_secret?.value) {
-            const token = tokenData.client_secret.value;
+        // Handle both response formats: {client_secret: {value: "..."}} or {value: "..."}
+        const token = tokenData.client_secret?.value || tokenData.value;
 
-            // Create WebSocket with token in subprotocol (some APIs support this)
-            // Or we need server-side WebSocket proxy
-            // For xAI, the documented approach is to use headers which browsers don't support
-
-            // Let's try connecting and sending auth as first message
-            ws = new WebSocket(WEBSOCKET_URL);
-
-            ws.onopen = () => {
-                log('WebSocket connected, sending auth...', 'success');
-
-                // Try to authenticate with the ephemeral token
-                // Based on docs, this should work for client-side auth
-                ws.send(JSON.stringify({
-                    type: 'session.update',
-                    authorization: `Bearer ${token}`,
-                    session: {
-                        voice: voiceSelect.value,
-                        instructions: instructionsInput.value,
-                        turn_detection: { type: 'server_vad' },
-                        audio: {
-                            input: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } },
-                            output: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } }
-                        }
-                    }
-                }));
-
-                setStatus('connected', 'Connected');
-                connectBtn.textContent = 'Disconnect';
-                connectBtn.classList.add('connected');
-                micButton.disabled = false;
-            };
-
-            setupWebSocketHandlers();
-        } else if (tokenData.error) {
-            throw new Error(tokenData.error);
-        } else {
+        if (!token) {
+            if (tokenData.error) {
+                throw new Error(tokenData.error);
+            }
             throw new Error('Unexpected token response format');
         }
+
+        // Create WebSocket with token in subprotocol (some APIs support this)
+        // Or we need server-side WebSocket proxy
+        // For xAI, the documented approach is to use headers which browsers don't support
+
+        // Let's try connecting and sending auth as first message
+        ws = new WebSocket(WEBSOCKET_URL);
+
+        ws.onopen = () => {
+            log('WebSocket connected, sending auth...', 'success');
+
+            // Try to authenticate with the ephemeral token
+            // Based on docs, this should work for client-side auth
+            ws.send(JSON.stringify({
+                type: 'session.update',
+                authorization: `Bearer ${token}`,
+                session: {
+                    voice: voiceSelect.value,
+                    instructions: instructionsInput.value,
+                    turn_detection: { type: 'server_vad' },
+                    audio: {
+                        input: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } },
+                        output: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } }
+                    }
+                }
+            }));
+
+            setStatus('connected', 'Connected');
+            connectBtn.textContent = 'Disconnect';
+            connectBtn.classList.add('connected');
+            micButton.disabled = false;
+        };
+
+        setupWebSocketHandlers();
 
     } catch (error) {
         log(`Connection error: ${error.message}`, 'error');
