@@ -257,9 +257,7 @@ async function connect() {
     }
 }
 
-// Since browser WebSocket doesn't support custom headers, 
-// we need to use the token in a different way.
-// Let's update the connect function to use direct API key via server proxy
+// Connect via server-side WebSocket proxy (handles authentication)
 async function connectWithToken() {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
@@ -267,63 +265,17 @@ async function connectWithToken() {
     }
 
     setStatus('connecting', 'Connecting...');
-    log('Connecting to Grok Voice API...');
+    log('Connecting via WebSocket proxy...');
 
     try {
-        // For browser-based connection without header support,
-        // we could use a WebSocket proxy. But for testing,
-        // let's try the direct connection with token in URL (if supported)
-        // or use the ephemeral token approach properly
+        // Connect to our local WebSocket proxy (which handles xAI auth)
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
 
-        const tokenResponse = await fetch('/session', { method: 'POST' });
-        if (!tokenResponse.ok) {
-            const errText = await tokenResponse.text();
-            throw new Error(`Failed to get token: ${errText}`);
-        }
-
-        const tokenData = await tokenResponse.json();
-        log(`Token response: ${JSON.stringify(tokenData).substring(0, 100)}...`);
-
-        // Handle both response formats: {client_secret: {value: "..."}} or {value: "..."}
-        const token = tokenData.client_secret?.value || tokenData.value;
-
-        if (!token) {
-            if (tokenData.error) {
-                throw new Error(tokenData.error);
-            }
-            throw new Error('Unexpected token response format');
-        }
-
-        // Create WebSocket with token in subprotocol (some APIs support this)
-        // Or we need server-side WebSocket proxy
-        // For xAI, the documented approach is to use headers which browsers don't support
-
-        // Let's try connecting and sending auth as first message
-        ws = new WebSocket(WEBSOCKET_URL);
+        ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            log('WebSocket connected, sending auth...', 'success');
-
-            // Try to authenticate with the ephemeral token
-            // Based on docs, this should work for client-side auth
-            ws.send(JSON.stringify({
-                type: 'session.update',
-                authorization: `Bearer ${token}`,
-                session: {
-                    voice: voiceSelect.value,
-                    instructions: instructionsInput.value,
-                    turn_detection: { type: 'server_vad' },
-                    audio: {
-                        input: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } },
-                        output: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } }
-                    }
-                }
-            }));
-
-            setStatus('connected', 'Connected');
-            connectBtn.textContent = 'Disconnect';
-            connectBtn.classList.add('connected');
-            micButton.disabled = false;
+            log('Connected to proxy, waiting for xAI...', 'success');
         };
 
         setupWebSocketHandlers();
@@ -340,6 +292,27 @@ function setupWebSocketHandlers() {
         log(`← ${data.type}`);
 
         switch (data.type) {
+            case 'proxy.connected':
+                // Proxy connected to xAI, now configure session
+                log('xAI connected, configuring session...', 'success');
+                ws.send(JSON.stringify({
+                    type: 'session.update',
+                    session: {
+                        voice: voiceSelect.value,
+                        instructions: instructionsInput.value,
+                        turn_detection: { type: 'server_vad' },
+                        audio: {
+                            input: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } },
+                            output: { format: { type: 'audio/pcm', rate: SAMPLE_RATE } }
+                        }
+                    }
+                }));
+                setStatus('connected', 'Connected');
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.classList.add('connected');
+                micButton.disabled = false;
+                break;
+
             case 'session.created':
             case 'session.updated':
                 log('Session ready', 'success');

@@ -1,6 +1,8 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const WebSocket = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,42 +20,75 @@ if (fs.existsSync(envPath)) {
 }
 
 const XAI_API_KEY = process.env.XAI_API_KEY;
-const SESSION_REQUEST_URL = 'https://api.x.ai/v1/realtime/client_secrets';
+const XAI_WS_URL = 'wss://api.x.ai/v1/realtime';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ephemeral token endpoint for secure client-side authentication
-app.post('/session', async (req, res) => {
-  if (!XAI_API_KEY) {
-    return res.status(500).json({ error: 'XAI_API_KEY not configured' });
-  }
+// Create HTTP server
+const server = http.createServer(app);
 
-  try {
-    const response = await fetch(SESSION_REQUEST_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${XAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ expires_after: { seconds: 300 } }),
-    });
+// Create WebSocket server for client connections
+const wss = new WebSocket.Server({ server, path: '/ws' });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('xAI API error:', response.status, errorText);
-      return res.status(response.status).json({ error: 'Failed to get ephemeral token' });
+wss.on('connection', (clientWs) => {
+  console.log('📱 Client connected');
+
+  // Connect to xAI with Authorization header
+  const xaiWs = new WebSocket(XAI_WS_URL, {
+    headers: {
+      'Authorization': `Bearer ${XAI_API_KEY}`
     }
+  });
 
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error('Session request error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  xaiWs.on('open', () => {
+    console.log('🔗 Connected to xAI Voice API');
+    clientWs.send(JSON.stringify({ type: 'proxy.connected' }));
+  });
+
+  xaiWs.on('message', (data) => {
+    // Forward xAI messages to client
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(data.toString());
+    }
+  });
+
+  xaiWs.on('error', (error) => {
+    console.error('❌ xAI WebSocket error:', error.message);
+    clientWs.send(JSON.stringify({
+      type: 'error',
+      error: { message: `xAI connection error: ${error.message}` }
+    }));
+  });
+
+  xaiWs.on('close', (code, reason) => {
+    console.log(`🔌 xAI connection closed: ${code} ${reason}`);
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.close(code, reason.toString());
+    }
+  });
+
+  // Forward client messages to xAI
+  clientWs.on('message', (data) => {
+    if (xaiWs.readyState === WebSocket.OPEN) {
+      xaiWs.send(data.toString());
+    }
+  });
+
+  clientWs.on('close', () => {
+    console.log('📴 Client disconnected');
+    if (xaiWs.readyState === WebSocket.OPEN) {
+      xaiWs.close();
+    }
+  });
+
+  clientWs.on('error', (error) => {
+    console.error('❌ Client WebSocket error:', error.message);
+  });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🎙️  Grok Voice Agent Test Server running at http://localhost:${PORT}`);
+  console.log(`   WebSocket proxy at ws://localhost:${PORT}/ws`);
   console.log(`   API Key configured: ${XAI_API_KEY ? '✓' : '✗ (missing)'}`);
 });
